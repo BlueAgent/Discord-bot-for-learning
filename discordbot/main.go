@@ -8,6 +8,16 @@ import (
 	"os"
 )
 
+type LastData struct {
+	Message string
+	Counter int
+	Reply string
+}
+
+var Last = make(map[string]LastData)
+
+var BotID string
+
 func main() {
 	var (
 		botToken = flag.String("token", "", "Bot Token")
@@ -34,6 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	BotID = u.ID
 	fmt.Fprintf(os.Stdout, "BotID: %s\n", u.ID)
 	
 	dg.AddHandler(messageCreate) 
@@ -54,4 +65,43 @@ func main() {
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	fmt.Println(m.Content)
+	if m.Author.ID == BotID {
+		return
+	}
+
+	data := Last[m.Author.ID]
+	
+	if data.Message == m.Content {
+		fmt.Println("Same")
+		data.Counter++
+		var msg *discordgo.Message
+		var err error
+		if data.Reply != "" {
+			msg, err = s.ChannelMessageEdit(
+				m.ChannelID,
+				data.Reply,
+				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
+			)
+		}
+		if data.Reply == "" || err != nil {
+			msg, err = s.ChannelMessageSend(
+				m.ChannelID, 
+				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
+			)
+		}
+		if err == nil {
+			data.Reply = (*msg).ID
+		} else {
+			data.Reply = ""
+			s.ChannelMessageDelete(m.ChannelID, data.Reply)
+			fmt.Fprintf(os.Stderr, "Failed to open websocket: %s\n", err)
+		}
+		s.ChannelMessageDelete(m.ChannelID, m.ID)
+	} else {
+		fmt.Println("Different")
+		data.Counter = 1
+		data.Reply = "" 
+	}
+	data.Message = m.Content
+	Last[m.Author.ID] = data
 }

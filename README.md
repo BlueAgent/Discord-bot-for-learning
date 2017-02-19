@@ -14,6 +14,9 @@ Mainly to document how I installed Go (I'm still new to unix) with reference to:
 
 1. Download latest go from https://golang.org/dl/
 	* `wget https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz`
+	* The above is not working for Bash on Windows, it has been fixed already but not released yet.
+	* [@robbiev said the 1.6.4 build works, and it does](https://github.com/Microsoft/BashOnWindows/issues/349#issuecomment-275907363)
+	* `wget https://storage.googleapis.com/golang/go1.6.4.linux-amd64.tar.gz`
 2. Extract to folder
 	* `tar -xzf go1.8.linux-amd64.tar.gz`
 	* `mv go ~/go1.8`

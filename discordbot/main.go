@@ -71,8 +71,8 @@ func main() {
 	}
 
 	fmt.Println("Bot has started. Exit with CTRL-C.")
-	//I have no idea how it works
-	//Discordgo example says it keeps the program running
+
+	//This works by reading from a channel that never gets anything written to it
 	<-make(chan struct{})
 	return
 }
@@ -104,28 +104,20 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		data, ok = b.Last[aID]
 	}
 
-	if data.Message == m.Content {
-		go s.ChannelMessageDelete(m.ChannelID, m.ID)
-	}
-
 	data.Sync.Lock()
-	//fmt.Println(m.Content)
 
 	if data.Message == m.Content {
-		//fmt.Println("Same")
 		data.Counter++
 		go s.ChannelMessageDelete(m.ChannelID, m.ID)
 		if data.Reply == nil {
 			data.Reply = make(chan int)
 			go ReplyCreate(s, m.ChannelID, m.Author.Username, m.Content, data.Reply)
-			fmt.Fprintf(os.Stdout, "Liming [%s]: %s\n", m.Author.Username, m.Content)
+			fmt.Fprintf(os.Stdout, "Limiting [%s]: %s\n", m.Author.Username, m.Content)
 		}
 		go func(count int, cc chan int) {
-			//fmt.Fprintf(os.Stdout, "cc>>%d\n", count)
 			cc <- count
 		}(data.Counter, data.Reply)
 	} else {
-		//fmt.Println("Different")
 		data.Counter = 1
 		if data.Reply != nil {
 			close(data.Reply)
@@ -134,6 +126,7 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	data.Message = m.Content
 	b.Last[aID] = data
+
 	data.Sync.Unlock()
 }
 
@@ -179,7 +172,6 @@ func ReplyCreate(s *discordgo.Session, channelID string, author string, content 
 			if !ok {
 				break
 			}
-			//fmt.Fprintf(os.Stdout, "cc<<%d\n", counter)
 			if largest >= counter {
 				continue
 			}

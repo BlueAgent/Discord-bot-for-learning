@@ -6,17 +6,27 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 )
 
 type LastData struct {
+	sync.Mutex
 	Message string
 	Counter int
 	Reply string
 }
 
-var Last = make(map[string]LastData)
+type Bot struct {
+	LastSync sync.Mutex
+	Last map[string]LastData
+	BotID string
+}
 
-var BotID string
+func NewBot(botId string) *Bot {
+	b := new(Bot)
+	b.BotID = botId
+	return b
+}
 
 func main() {
 	var (
@@ -44,10 +54,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	BotID = u.ID
 	fmt.Fprintf(os.Stdout, "BotID: %s\n", u.ID)
-	
-	dg.AddHandler(messageCreate) 
+
+	b := NewBot(u.ID)
+
+	dg.AddHandler(b.messageCreate)
 
 	//Open websocket and start listening
 	err = dg.Open()
@@ -63,13 +74,13 @@ func main() {
 	return
 }
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (b *Bot) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	fmt.Println(m.Content)
-	if m.Author.ID == BotID {
+	if m.Author.ID == b.BotID {
 		return
 	}
 
-	data := Last[m.Author.ID]
+	data := b.Last[m.Author.ID]
 	
 	if data.Message == m.Content {
 		fmt.Println("Same")
@@ -103,5 +114,5 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		data.Reply = "" 
 	}
 	data.Message = m.Content
-	Last[m.Author.ID] = data
+	b.Last[m.Author.ID] = data
 }

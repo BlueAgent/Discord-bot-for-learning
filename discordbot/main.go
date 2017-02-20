@@ -120,7 +120,9 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	} else {
 		data.Counter = 1
 		if data.Reply != nil {
-			close(data.Reply)
+			go func(cc chan int) {
+				cc <- -1
+			}(data.Reply)
 			data.Reply = nil
 		}
 	}
@@ -130,20 +132,23 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	data.Sync.Unlock()
 }
 
-func Btoi(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 func ReplyCreate(s *discordgo.Session, channelID string, author string, content string, cc chan int) {
 	var messageID string = ""
 	var largest = 1
 	var changed = false
+	defer close(cc)
+
 	for true {
+		var cooldown = time.Second * 4;
+		if !changed {
+			cooldown = time.Second * 256
+		}
 		select {
-		case <-time.After(time.Second * 3 * time.Duration(1 + Btoi(!changed)*9999)):
+		case <-time.After(cooldown):
+			if !changed {
+				continue
+			}
+
 			var msg *discordgo.Message
 			var err error
 
@@ -169,7 +174,7 @@ func ReplyCreate(s *discordgo.Session, channelID string, author string, content 
 				fmt.Fprintf(os.Stderr, "Failed to send/update message: %s\n", err)
 			}
 		case counter, ok := <-cc:
-			if !ok {
+			if !ok || counter < 0 {
 				break
 			}
 			if largest >= counter {

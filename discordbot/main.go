@@ -10,7 +10,7 @@ import (
 )
 
 type LastData struct {
-	sync.Mutex
+	Sync sync.Mutex
 	Message string
 	Counter int
 	Reply string
@@ -23,9 +23,11 @@ type Bot struct {
 }
 
 func NewBot(botId string) *Bot {
-	b := new(Bot)
-	b.BotID = botId
-	return b
+	b := Bot{
+		Last: make(map[string]LastData),
+		BotID: botId,
+	}
+	return &b
 }
 
 func main() {
@@ -75,15 +77,44 @@ func main() {
 }
 
 func (b *Bot) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	fmt.Println(m.Content)
 	if m.Author.ID == b.BotID {
 		return
 	}
 
-	data := b.Last[m.Author.ID]
+	var aID = m.Author.ID
+
+	//Retrive Last
+	data, ok := b.Last[aID]
 	
+	//If not found, get a lock to create one
+	if !ok {
+		b.LastSync.Lock()
+		//Check Again
+		if data, ok = b.Last[aID]; !ok {
+			//Safe to create now
+			b.Last[aID] = LastData{
+				Message: "",
+				Counter: 1,
+				Reply: "",
+			}
+		}
+		b.LastSync.Unlock()
+	}
+
+	if data.Message == m.Content {
+		go s.ChannelMessageDelete(m.ChannelID, m.ID)
+	}
+
+	//Only one thread per user
+	data.Sync.Lock()
+	//data.Sync.Unlock() //Should get run after the function returns
+
+	fmt.Println(m.Content)
+
 	if data.Message == m.Content {
 		fmt.Println("Same")
+		go s.ChannelMessageDelete(m.ChannelID, m.ID)
+
 		data.Counter++
 		var msg *discordgo.Message
 		var err error
@@ -93,26 +124,30 @@ func (b *Bot) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				data.Reply,
 				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
 			)
+			if err != nil {
+				s.ChannelMessageDelete(m.ChannelID, data.Reply)
+				data.Reply = ""
+			}
 		}
 		if data.Reply == "" || err != nil {
 			msg, err = s.ChannelMessageSend(
 				m.ChannelID, 
 				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
 			)
+			if err == nil {
+				data.Reply = (*msg).ID
+			} else {
+				data.Reply = ""
+				fmt.Fprintf(os.Stderr, "Failed to send new message: %s\n", err)
+			}
 		}
-		if err == nil {
-			data.Reply = (*msg).ID
-		} else {
-			data.Reply = ""
-			s.ChannelMessageDelete(m.ChannelID, data.Reply)
-			fmt.Fprintf(os.Stderr, "Failed to open websocket: %s\n", err)
-		}
-		s.ChannelMessageDelete(m.ChannelID, m.ID)
 	} else {
 		fmt.Println("Different")
 		data.Counter = 1
 		data.Reply = "" 
 	}
 	data.Message = m.Content
-	b.Last[m.Author.ID] = data
+	data.Sync.Unlock()
+	b.Last[aID] = data
+	fmt.Println("Unlocked")
 }

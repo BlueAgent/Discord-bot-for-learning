@@ -2,11 +2,12 @@ package main
 //Made with heavy reference to discordgo examples
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"flag"
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"os"
 	"sync"
+	"time"
 )
 
 type LastData struct {
@@ -107,27 +108,24 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		go s.ChannelMessageDelete(m.ChannelID, m.ID)
 	}
 
-	//fmt.Println("Waiting for Lock")
-	//fmt.Println(data)
-	//fmt.Println(data.Sync)
 	data.Sync.Lock()
-	//fmt.Println("Locked")
-	fmt.Println(m.Content)
+	//fmt.Println(m.Content)
 
 	if data.Message == m.Content {
-		fmt.Println("Same")
+		//fmt.Println("Same")
 		data.Counter++
 		go s.ChannelMessageDelete(m.ChannelID, m.ID)
 		if data.Reply == nil {
 			data.Reply = make(chan int)
 			go ReplyCreate(s, m.ChannelID, m.Author.Username, m.Content, data.Reply)
+			fmt.Fprintf(os.Stdout, "Liming [%s]: %s\n", m.Author.Username, m.Content)
 		}
 		go func(count int, cc chan int) {
-			fmt.Fprintf(os.Stdout, "cc>>%d\n", count)
+			//fmt.Fprintf(os.Stdout, "cc>>%d\n", count)
 			cc <- count
 		}(data.Counter, data.Reply)
 	} else {
-		fmt.Println("Different")
+		//fmt.Println("Different")
 		data.Counter = 1
 		if data.Reply != nil {
 			close(data.Reply)
@@ -137,40 +135,70 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	data.Message = m.Content
 	b.Last[aID] = data
 	data.Sync.Unlock()
-	//fmt.Println("Unlocked")
+}
+
+func Btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func ReplyCreate(s *discordgo.Session, channelID string, author string, content string, cc chan int) {
 	var messageID string = ""
 	var largest = 1
-	for counter := range cc {
-		fmt.Fprintf(os.Stdout, "cc<<%d\n", counter)
-		if largest >= counter {
-			continue
-		}
-		largest = counter
-		
-		var msg *discordgo.Message
-		var err error
+	var changed = false
+	for true {
+		select {
+		case <-time.After(time.Second * 3 * time.Duration(1 + Btoi(!changed)*9999)):
+			var msg *discordgo.Message
+			var err error
 
-		if messageID == "" {
-			msg, err = s.ChannelMessageSend(
-				channelID, 
-				fmt.Sprintf("(x%d)[%s] %s", counter, author, content),
-			)
-		} else {
-			msg, err = s.ChannelMessageEdit(
-				channelID,
-				messageID,
-				fmt.Sprintf("(x%d)[%s] %s", counter, author, content),
-			)	
-		}
-		if err == nil {
-			messageID = (*msg).ID
-		} else {
-			s.ChannelMessageDelete(channelID, messageID)
-			messageID = ""
-			fmt.Fprintf(os.Stderr, "Failed to send/update message: %s\n", err)
+			if messageID == "" {
+				msg, err = s.ChannelMessageSend(
+					channelID, 
+					fmt.Sprintf("(x%d)[%s] %s", largest, author, content),
+				)
+			} else {
+				msg, err = s.ChannelMessageEdit(
+					channelID,
+					messageID,
+					fmt.Sprintf("(x%d)[%s] %s", largest, author, content),
+				)
+			}
+			if err == nil {
+				messageID = (*msg).ID
+				fmt.Fprintf(os.Stdout, "Updating [%s] x%d\n", author, largest)
+				changed = false
+			} else {
+				s.ChannelMessageDelete(channelID, messageID)
+				messageID = ""
+				fmt.Fprintf(os.Stderr, "Failed to send/update message: %s\n", err)
+			}
+		case counter, ok := <-cc:
+			if !ok {
+				break
+			}
+			//fmt.Fprintf(os.Stdout, "cc<<%d\n", counter)
+			if largest >= counter {
+				continue
+			}
+			largest = counter
+			changed = true
+
+			if messageID == "" {
+				msg, err := s.ChannelMessageSend(
+					channelID, 
+					fmt.Sprintf("(x%d)[%s] %s", counter, author, content),
+				)
+				if err == nil {
+					messageID = (*msg).ID
+				} else {
+					s.ChannelMessageDelete(channelID, messageID)
+					messageID = ""
+					fmt.Fprintf(os.Stderr, "Failed to send message: %s\n", err)
+				}
+			}
 		}
 	}
 }

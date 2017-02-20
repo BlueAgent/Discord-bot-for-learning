@@ -5,7 +5,7 @@ Discord bot for learning git, go, linux, vim, and to have fun!
 ## Compiling and Running
 
 	go get github.com/BlueAgent/Discord-bot-for-learning/discordbot
-	discordbot -t <Your bot token>
+	discordbot -token <Your bot token>
 
 ## How to install Go
 

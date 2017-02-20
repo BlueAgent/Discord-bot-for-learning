@@ -1,12 +1,11 @@
 # Discord-bot-for-learning
 
-Discord bot for learning git, go, linux, and to have fun!
+Discord bot for learning git, go, linux, vim, and to have fun!
 
-## Compiling
+## Compiling and Running
 
-	go get github.com/BlueAgent/Discord-bot-for-learning/hello
-
-Replace "hello" with the program you want
+	go get github.com/BlueAgent/Discord-bot-for-learning/discordbot
+	discordbot -t <Your bot token>
 
 ## How to install Go
 
@@ -26,5 +25,21 @@ Mainly to document how I installed Go (I'm still new to unix) with reference to:
 4. Optional: Configure Go workspace folder (defaults to ~/go or C:/go)
 	* `export GOPATH=/mnt/c/go`
     * Tried using a symlink but it caused problems with Bash on Ubuntu on Windows.
-5. Optinal: Add Go compiled programs to the path
+5. Optional: Add Go compiled programs to the path
 	* `export PATH=$PATH:$GOPATH/bin`
+
+## Thank you
+
+[discord](https://discordapp.com/developers/docs/intro) for being the best chat and voip for gamers ever.
+
+[discordgo](https://github.com/bwmarrin/discordgo/) for creating bindings for the DiscordAPI and for making examples too.
+
+[golang](https://golang.org/) for being a fun and interesting language.
+
+[stackoverflow](http://stackoverflow.com) community for the great questions and answers.
+
+[vim](http://www.vim.org/) ,vimtutor and [amix' vimrc](https://github.com/amix/vimrc) for making vim really nice to learn and use.
+
+[Bash on Ubuntu on Windows](https://github.com/Microsoft/BashOnWindows) for access to the amazing unix ecosystem without dual-booting or virtualisation.
+
+[git](https://git-scm.com/) and [GitHub](https://github.com/) for keeping code and code history safe.

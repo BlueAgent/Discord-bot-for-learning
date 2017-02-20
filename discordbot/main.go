@@ -10,10 +10,10 @@ import (
 )
 
 type LastData struct {
-	Sync sync.Mutex
+	Sync *sync.Mutex
 	Message string
 	Counter int
-	Reply string
+	Reply chan int
 }
 
 type Bot struct {
@@ -60,7 +60,7 @@ func main() {
 
 	b := NewBot(u.ID)
 
-	dg.AddHandler(b.messageCreate)
+	dg.AddHandler(b.MessageCreate)
 
 	//Open websocket and start listening
 	err = dg.Open()
@@ -76,7 +76,7 @@ func main() {
 	return
 }
 
-func (b *Bot) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == b.BotID {
 		return
 	}
@@ -93,61 +93,85 @@ func (b *Bot) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if data, ok = b.Last[aID]; !ok {
 			//Safe to create now
 			b.Last[aID] = LastData{
+				Sync: new(sync.Mutex),
 				Message: "",
 				Counter: 1,
-				Reply: "",
+				Reply: nil,
 			}
 		}
 		b.LastSync.Unlock()
+		data, ok = b.Last[aID]
 	}
 
 	if data.Message == m.Content {
 		go s.ChannelMessageDelete(m.ChannelID, m.ID)
 	}
 
-	//Only one thread per user
+	//fmt.Println("Waiting for Lock")
+	//fmt.Println(data)
+	//fmt.Println(data.Sync)
 	data.Sync.Lock()
-	//data.Sync.Unlock() //Should get run after the function returns
-
+	//fmt.Println("Locked")
 	fmt.Println(m.Content)
 
 	if data.Message == m.Content {
 		fmt.Println("Same")
-		go s.ChannelMessageDelete(m.ChannelID, m.ID)
-
 		data.Counter++
-		var msg *discordgo.Message
-		var err error
-		if data.Reply != "" {
-			msg, err = s.ChannelMessageEdit(
-				m.ChannelID,
-				data.Reply,
-				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
-			)
-			if err != nil {
-				s.ChannelMessageDelete(m.ChannelID, data.Reply)
-				data.Reply = ""
-			}
+		go s.ChannelMessageDelete(m.ChannelID, m.ID)
+		if data.Reply == nil {
+			data.Reply = make(chan int)
+			go ReplyCreate(s, m.ChannelID, m.Author.Username, m.Content, data.Reply)
 		}
-		if data.Reply == "" || err != nil {
-			msg, err = s.ChannelMessageSend(
-				m.ChannelID, 
-				fmt.Sprintf("(x%d)[%s] %s", data.Counter, m.Author.Username, data.Message),
-			)
-			if err == nil {
-				data.Reply = (*msg).ID
-			} else {
-				data.Reply = ""
-				fmt.Fprintf(os.Stderr, "Failed to send new message: %s\n", err)
-			}
-		}
+		go func(count int, cc chan int) {
+			fmt.Fprintf(os.Stdout, "cc>>%d\n", count)
+			cc <- count
+		}(data.Counter, data.Reply)
 	} else {
 		fmt.Println("Different")
 		data.Counter = 1
-		data.Reply = "" 
+		if data.Reply != nil {
+			close(data.Reply)
+			data.Reply = nil
+		}
 	}
 	data.Message = m.Content
-	data.Sync.Unlock()
 	b.Last[aID] = data
-	fmt.Println("Unlocked")
+	data.Sync.Unlock()
+	//fmt.Println("Unlocked")
 }
+
+func ReplyCreate(s *discordgo.Session, channelID string, author string, content string, cc chan int) {
+	var messageID string = ""
+	var largest = 1
+	for counter := range cc {
+		fmt.Fprintf(os.Stdout, "cc<<%d\n", counter)
+		if largest >= counter {
+			continue
+		}
+		largest = counter
+		
+		var msg *discordgo.Message
+		var err error
+
+		if messageID == "" {
+			msg, err = s.ChannelMessageSend(
+				channelID, 
+				fmt.Sprintf("(x%d)[%s] %s", counter, author, content),
+			)
+		} else {
+			msg, err = s.ChannelMessageEdit(
+				channelID,
+				messageID,
+				fmt.Sprintf("(x%d)[%s] %s", counter, author, content),
+			)	
+		}
+		if err == nil {
+			messageID = (*msg).ID
+		} else {
+			s.ChannelMessageDelete(channelID, messageID)
+			messageID = ""
+			fmt.Fprintf(os.Stderr, "Failed to send/update message: %s\n", err)
+		}
+	}
+}
+

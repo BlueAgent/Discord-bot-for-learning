@@ -77,6 +77,21 @@ func main() {
 	return
 }
 
+func MessageIdentifier(m *discordgo.Message) string {
+	var id = m.Content	
+	if len(m.Attachments) > 0 {
+		for _,a := range m.Attachments {
+			id += "|" + a.URL
+		}
+	}
+	if len(m.Embeds) > 0 {
+		for _,e := range m.Embeds {
+			id += "|" + e.URL
+		}
+	}
+	return id
+}
+
 func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == b.BotID {
 		return
@@ -105,8 +120,9 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	data.Sync.Lock()
+	var msgID = MessageIdentifier(m.Message)
 
-	if data.Message == m.Content {
+	if data.Message == msgID {
 		data.Counter++
 		go s.ChannelMessageDelete(m.ChannelID, m.ID)
 		if data.Reply == nil {
@@ -126,7 +142,7 @@ func (b *Bot) MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			data.Reply = nil
 		}
 	}
-	data.Message = m.Content
+	data.Message = msgID
 	b.Last[aID] = data
 
 	data.Sync.Unlock()

@@ -61,7 +61,10 @@ func main() {
 
 	b := NewBot(u.ID)
 
+	//Event Handlers
 	dg.AddHandler(b.MessageCreate)
+	dg.AddHandler(b.Connect)
+	dg.AddHandler(b.Disconnect)
 
 	//Open websocket and start listening
 	err = dg.Open()
@@ -214,5 +217,13 @@ func ReplyCreate(s *discordgo.Session, channelID string, author string, content 
 			}
 		}
 	}
+}
+
+func (b *Bot) Connect(s *discordgo.Session, c *discordgo.Connect) {
+	fmt.Println("Connected")
+}
+
+func (b *Bot) Disconnect(s *discordgo.Session, d *discordgo.Disconnect) {
+	fmt.Println("Disconnected")
 }
 
